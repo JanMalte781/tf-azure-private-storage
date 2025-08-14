@@ -1,4 +1,7 @@
 output "resource_group_name" {
-    name = "${var.project_name}-rg"
-    location = var.location
+  value     = azurerm_resource_group.main.name
+}
+
+output "location" {
+    value = "${var.location}"
 }
