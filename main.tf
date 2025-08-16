@@ -46,7 +46,7 @@ resource "azurerm_virtual_network" "main" {
   address_space       = ["10.0.0.0/16"]
 }
 
-#Subnet
+#Subnets
 resource "azurerm_subnet" "private_subnet" {
   name                 = "${var.project_name}-private-subnet"
   resource_group_name  = azurerm_resource_group.main.name
@@ -54,6 +54,13 @@ resource "azurerm_subnet" "private_subnet" {
   address_prefixes     = ["10.0.1.0/24"]
 
   private_endpoint_network_policies = "Enabled"
+}
+
+resource "azurerm_subnet" "webapp_subnet" {
+  name = "${var.project_name}-webapp-subnet"
+  resource_group_name = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes = ["10.0.2.0/24"]
 }
 
 #NSG anbinden
@@ -69,6 +76,13 @@ resource "azurerm_storage_account" "my_storage_account" {
   resource_group_name      = azurerm_resource_group.main.name
   account_tier             = "Standard"
   account_replication_type = "LRS"
+
+  public_network_access_enabled = false
+
+  network_rules {
+    default_action = "Deny"
+    bypass         = ["None"]  # auch Azure Services nicht durchlassen
+  }
 }
 
 #Private Endpoint for Storage Account
@@ -104,3 +118,62 @@ resource "azurerm_private_dns_zone_virtual_network_link" "my_terraform_vnet_link
   virtual_network_id    = azurerm_virtual_network.main.id
 }
 
+#App Service Plan
+resource "azurerm_service_plan" "webapp_plan" {
+  name                = "${var.project_name}-plan"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  os_type             = "Linux"
+  sku_name            = "B1"   # Basic Tier
+}
+
+# Linux Web App
+resource "azurerm_linux_web_app" "webapp" {
+  name                = "${var.project_name}-webapp"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  service_plan_id     = azurerm_service_plan.webapp_plan.id
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  site_config {
+    linux_fx_version = "DOCKER|${azurerm_container_registry.acr.login_server}/mini-blob-writer-python:latest"
+  }
+
+  app_settings = {
+    "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
+    "STORAGE_ACCOUNT_NAME"                = azurerm_storage_account.storage.name
+    "CONTAINER_NAME"                      = "inputs"
+  }
+}
+
+#Vnet Integration
+resource "azurerm_app_service_virtual_network_swift_connection" "vnet_integration" {
+  app_service_id = azurerm_linux_web_app.webapp.id
+  subnet_id      = azurerm_subnet.webapp_subnet.id##
+}
+
+#ACR
+resource "azurerm_container_registry" "acr" {
+  name                = "myacr23456234654"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  sku                 = "Basic"
+  admin_enabled       = false  
+  #public_network_access_enabled = false 
+}
+
+# Role Assignments
+resource "azurerm_role_assignment" "webapp_storage" {
+  principal_id         = azurerm_linux_web_app.webapp.identity[0].principal_id
+  role_definition_name = "Storage Blob Data Contributor"
+  scope                = azurerm_storage_account.my_storage_account.id
+}
+
+resource "azurerm_role_assignment" "webapp_acr_pull" {
+  principal_id         = azurerm_linux_web_app.webapp.identity[0].principal_id
+  role_definition_name = "AcrPull"
+  scope                = azurerm_container_registry.acr.id
+}
