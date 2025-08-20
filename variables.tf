@@ -10,3 +10,17 @@ variable "location" {
   default     = "germanywestcentral"
 }
 
+variable "admin_username" {
+  default = "azureuser"
+}
+
+variable "admin_password" {
+  description = "Password for Windows VM"
+  type        = string
+  sensitive   = true
+}
+
+variable "myIP" {
+  description = "eigene IP Adresse"
+  type = string
+}
