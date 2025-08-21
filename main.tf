@@ -95,22 +95,22 @@ resource "azurerm_storage_account" "my_storage_account" {
   public_network_access_enabled = false
   network_rules {
     default_action = "Deny"
-    bypass         = ["None"]  # auch Azure Services nicht durchlassen
+    bypass         = ["None"] # auch Azure Services nicht durchlassen
   }
 }
 
 #Private Endpoint for Storage Account
-resource "azurerm_private_endpoint" "my_private_endpoint"{
-  name = "private-endpoint-for-storage"
-  location = azurerm_resource_group.main.location
+resource "azurerm_private_endpoint" "my_private_endpoint" {
+  name                = "private-endpoint-for-storage"
+  location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
-  subnet_id = azurerm_subnet.private_subnet.id
+  subnet_id           = azurerm_subnet.private_subnet.id
 
   private_service_connection {
-    name = "private-serviceconnection"
+    name                           = "private-serviceconnection"
     private_connection_resource_id = azurerm_storage_account.my_storage_account.id
-    subresource_names = ["blob"] 
-    is_manual_connection = false
+    subresource_names              = ["blob"]
+    is_manual_connection           = false
   }
 
   private_dns_zone_group {
@@ -121,7 +121,7 @@ resource "azurerm_private_endpoint" "my_private_endpoint"{
 
 # Create private DNS zone
 resource "azurerm_private_dns_zone" "my_terraform_dns_zone" {
-  name                = "privatelink.database.windows.net"
+  name                = "privatelink.blob.core.windows.net"
   resource_group_name = azurerm_resource_group.main.name
 }
 
@@ -133,6 +133,17 @@ resource "azurerm_private_dns_zone_virtual_network_link" "my_terraform_vnet_link
   virtual_network_id    = azurerm_virtual_network.main.id
 }
 
+#public IP
+resource "azurerm_public_ip" "vm_pip" {
+  name                = "winvm-pip"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  allocation_method   = "Static"    
+  sku                 = "Standard" 
+}
+
+
 # NIC
 resource "azurerm_network_interface" "vm_nic" {
   name                = "${var.project_name}-vm-nic"
@@ -143,6 +154,7 @@ resource "azurerm_network_interface" "vm_nic" {
     name                          = "internal"
     subnet_id                     = azurerm_subnet.main.id
     private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.vm_pip.id
   }
 }
 
@@ -151,7 +163,7 @@ resource "azurerm_windows_virtual_machine" "vm" {
   name                = "winvm"
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
-  size                = "Standard_A1_v2"
+  size                = "Standard_D2ads_v6"
 
   admin_username = var.admin_username
   admin_password = var.admin_password
@@ -168,13 +180,15 @@ resource "azurerm_windows_virtual_machine" "vm" {
   source_image_reference {
     publisher = "MicrosoftWindowsServer"
     offer     = "WindowsServer"
-    sku       = "2022-datacenter-azure-edition"
+    sku       = "2025-datacenter-azure-edition"
     version   = "latest"
   }
 
   identity {
     type = "SystemAssigned"
   }
+
+  patch_mode = "AutomaticByPlatform"
 }
 
 # Rolle für Storage Zugriff

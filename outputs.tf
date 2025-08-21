@@ -1,9 +1,9 @@
 output "resource_group_name" {
-  value     = azurerm_resource_group.main.name
+  value = azurerm_resource_group.main.name
 }
 
 output "location" {
-    value = "${var.location}"
+  value = var.location
 }
 
 output "storage_account_name" {

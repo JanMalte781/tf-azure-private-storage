@@ -22,5 +22,5 @@ variable "admin_password" {
 
 variable "myIP" {
   description = "eigene IP Adresse"
-  type = string
+  type        = string
 }
